@@ -2,7 +2,7 @@
 
 extern crate encoding_rs;
 
-use std::io::{self, Read, Write};
+use std::io::{self, BufRead, Read, Write};
 use std::ptr;
 
 use encoding_rs::*;
@@ -59,23 +59,23 @@ impl Buffer {
     }
 }
 
-pub struct TextReader<'a, R> {
+pub struct TextReader<R> {
     inner: R,
-    decoder: &'a mut Decoder,
+    decoder: Decoder,
     unprocessed_buf: Buffer,
     decoded_buf: Buffer,
     finished: bool,
 }
 
-impl<'a, R: Read> TextReader<'a, R> {
-    pub fn new(reader: R, decoder: &'a mut Decoder) -> TextReader<'a, R> {
-        Self::with_capacity(reader, decoder, BUF_CAPACITY, BUF_CAPACITY)
+impl<'a, R: Read> TextReader<R> {
+    pub fn new(reader: R, encoding: &'static Encoding) -> TextReader<R> {
+        Self::with_capacity(reader, encoding, BUF_CAPACITY, BUF_CAPACITY)
     }
-    pub fn with_capacity(reader: R, decoder: &'a mut Decoder,
-                         unprocessed_buf_capacity: usize, decoded_buf_capacity: usize) -> TextReader<'a, R> {
+    pub fn with_capacity(reader: R, encoding: &'static Encoding,
+                         unprocessed_buf_capacity: usize, decoded_buf_capacity: usize) -> TextReader<R> {
         TextReader {
             inner: reader,
-            decoder: decoder,
+            decoder: encoding.new_decoder(),
             unprocessed_buf: Buffer::with_capacity(unprocessed_buf_capacity),
             decoded_buf: Buffer::with_capacity(decoded_buf_capacity),
             finished: false,
@@ -105,12 +105,22 @@ impl<'a, R: Read> TextReader<'a, R> {
     }
 }
 
-impl<'a, R: Read> Read for TextReader<'a, R> {
+impl<'a, R: Read> Read for TextReader<R> {
     fn read(&mut self, dst: &mut [u8]) -> io::Result<usize> {
         if dst.len() > self.decoded_buf.len() {
             self.decode_to_buf()?;
         }
         self.decoded_buf.write_into(dst)
+    }
+}
+
+impl<'a, R: Read> BufRead for TextReader<R> {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        self.decode_to_buf()?;
+        Ok(self.decoded_buf.get_for_consume())
+    }
+    fn consume(&mut self, amt: usize) {
+        self.decoded_buf.report_consumed_bytes(amt)
     }
 }
 
@@ -120,14 +130,12 @@ mod tests {
     use super::*;
     #[test]
     fn sjis_test() {
-        //let mut sjisenc = SHIFT_JIS.new_encoder();
-        let mut sjisdec = SHIFT_JIS.new_decoder();
         let s = "テストaてすと嗚呼ああああ";
         let (v, _, _) = SHIFT_JIS.encode(s);
         let v: Vec<u8> = v.into_owned();
         println!("{:?}", v);
         let mut decoded = Vec::new();
-        let mut streamdec = TextReader::new(v.as_slice(), &mut sjisdec);
+        let mut streamdec = TextReader::new(v.as_slice(), SHIFT_JIS);
         streamdec.read_to_end(&mut decoded).unwrap();
         println!("{:?}", s.as_bytes());
         println!("{:?}", decoded.as_slice());
@@ -137,16 +145,36 @@ mod tests {
     #[test]
     fn sjis_test2() {
         //let mut sjisenc = SHIFT_JIS.new_encoder();
-        let mut sjisdec = SHIFT_JIS.new_decoder();
         let s = "テストaてすと嗚呼ああああ";
         let (v, _, _) = SHIFT_JIS.encode(s);
         let v: Vec<u8> = v.into_owned();
         println!("{:?}", v);
         let mut decoded = Vec::new();
-        let mut streamdec = TextReader::with_capacity(v.as_slice(), &mut sjisdec, 10, 10);
+        let mut streamdec = TextReader::with_capacity(v.as_slice(), SHIFT_JIS, 10, 10);
         streamdec.read_to_end(&mut decoded).unwrap();
         println!("{:?}", s.as_bytes());
         println!("{:?}", decoded.as_slice());
         assert_eq!(s.as_bytes(), decoded.as_slice());
+    }
+    #[test]
+    fn lines_test() {
+        let s = "\
+あああおいあああ
+ざあああ
+っっっっががｋｌｋｆじゃちあ
+afdalfいあｊｄふぃえ";
+        let (v, _, _) = EUC_JP.encode(s);
+        let v: Vec<u8> = v.into_owned();
+        let reader = TextReader::with_capacity(v.as_slice(), EUC_JP, 5, 5);
+        let mut lines = reader.lines();
+        for line1 in s.lines() {
+            let line2 = lines.next();
+            assert!(line2.is_some());
+            let line2 = line2.unwrap();
+            assert!(line2.is_ok());
+            let line2 = line2.unwrap();
+            assert_eq!(line1, &line2);
+        }
+        assert!(lines.next().is_none());
     }
 }
