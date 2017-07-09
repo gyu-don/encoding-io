@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["TextReader","`TextReader` is a wrapper for a non-utf8 encoded text reader. It behaves as a utf8 encoded text reader."],["TextWriter","`TextWriter` is a wrapper for writer. It encodes given bytes to utf8 then write to a writer."]]});

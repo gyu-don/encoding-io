@@ -1,6 +1,6 @@
 [package]
 authors = ["gyu-don <takumi.kt+git@gmail.com>"]
-name = "encoding-io"
+name = "encoding_io"
 version = "0.1.0"
 
 [dependencies]
