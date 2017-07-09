@@ -72,6 +72,7 @@ impl Buffer {
 /// It behaves as a utf8 encoded text reader.
 ///
 /// Examples:
+///
 /// ```
 /// use std::fs::File;
 /// use std::io::{Read, BufRead};
@@ -178,6 +179,7 @@ impl<R: Read> BufRead for TextReader<R> {
 /// It encodes given bytes to utf8 then write to a writer.
 ///
 /// Examples
+///
 /// ```
 /// use std::fs::File;
 /// use std::io::Write;
